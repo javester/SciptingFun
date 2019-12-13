@@ -23,7 +23,7 @@ param(
 if ((Get-AzContext) -eq $null)
 {
     Write-Output "Please log in to Azure first."
-    Add-AzAccount
+    Add-AzAccount -EA Stop
 }
 
 Set-AzContext -Subscription $subscriptionId -ErrorAction Stop
