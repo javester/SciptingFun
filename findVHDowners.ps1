@@ -7,8 +7,8 @@
 
 param
 (
-[Parameter(Mandatory=$false)]$SubscriptionID,
-[Parameter(Mandatory=$false)]$StorageAccountName,
+[Parameter(Mandatory=$true)]$SubscriptionID,
+[Parameter(Mandatory=$true)]$StorageAccountName,
 [switch]$OutputToCSV # OUTPUT RESULTS TO A CSV FILE
 )
 $OutputToCSV=$FALSE
