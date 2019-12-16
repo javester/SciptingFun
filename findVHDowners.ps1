@@ -2,8 +2,6 @@
     .SYNOPSIS
         
         find all VHDs in a classic storage account and get info on them such as owner etc
-         
-
 #>
 
 
@@ -11,7 +9,7 @@ param
 (
 [Parameter(Mandatory=$false)]$SubscriptionID,
 [Parameter(Mandatory=$false)]$StorageAccountName,
-[switch]$OutputToCSV
+[switch]$OutputToCSV # OUTPUT RESULTS TO A CSV FILE
 )
 $OutputToCSV=$FALSE
 
@@ -55,14 +53,10 @@ foreach ($container in (Get-AzureStorageContainer -Context $storagecontext))
 
 if ($OutputToCSV)
 {
-
-$results | Export-Csv -NoTypeInformation -Path ".\VHD-$StorageAccountName.csv" -Force -Append -ErrorAction Stop
-Write-Output "File output to .\VHD-$StorageAccountName.csv"
-
+    $results | Export-Csv -NoTypeInformation -Path ".\VHD-$StorageAccountName.csv" -Force -Append -ErrorAction Stop
+    Write-Output "File output to .\VHD-$StorageAccountName.csv"
 }
 else
 {
     $results
 }
-
-
