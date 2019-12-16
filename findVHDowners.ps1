@@ -18,7 +18,7 @@ $results = @()
 
 foreach ($sa in (Get-AzureStorageAccount -ErrorAction Stop))
 {
-    write-output "Searching Storage Account '$($SA.Name)'..."
+    write-output "Searching Storage Account '$($SA.StorageAccountName)'..."
     $storagecontext = $($SA.Context)
 
     foreach ($container in (Get-AzureStorageContainer -Context $storagecontext))
