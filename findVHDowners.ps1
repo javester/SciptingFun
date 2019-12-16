@@ -10,8 +10,6 @@ param
 [Parameter(Mandatory=$true)]$SubscriptionID,
 [switch]$OutputToCSV
 )
-$OutputToCSV=$FALSE
-
 Select-AzureSubscription -SubscriptionId $SubscriptionID -EA Stop
 
 $results = @()
