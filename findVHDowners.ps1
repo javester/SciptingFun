@@ -10,7 +10,7 @@ param
 [Parameter(Mandatory=$true)]$SubscriptionID,
 [switch]$OutputToCSV
 )
-Select-AzureSubscription -SubscriptionId $SubscriptionID -EA Stop
+$subscription = Select-AzureSubscription -SubscriptionId $SubscriptionID -EA Stop
 
 $results = @()
 
@@ -28,7 +28,7 @@ foreach ($sa in (Get-AzureStorageAccount -ErrorAction Stop))
             $blob = $blob | Where {$_.Name -like '*.vhd'}  
     
             $OBJ = New-Object -TypeName PSObject
-            $OBJ | Add-Member -MemberType NoteProperty -Name Subscription -Value $SubscriptionID 
+            $OBJ | Add-Member -MemberType NoteProperty -Name Subscription -Value $($Subscription.Name)
             $OBJ | Add-Member -MemberType NoteProperty -Name StorageAccount -Value $($storagecontext.Name)
             $OBJ | Add-Member -MemberType NoteProperty -Name Container -Value $($container.Name)
             $OBJ | Add-Member -MemberType NoteProperty -Name Blob -Value $($blob.Name)
@@ -60,5 +60,4 @@ else
 {
     $results
 }
-
 
