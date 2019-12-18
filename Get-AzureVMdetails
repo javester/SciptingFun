@@ -58,7 +58,7 @@ foreach ($sub in $subs)
 } # end arm
 
 # start asm
-$csubs = Get-AzureSubscription
+try{$csubs = Get-AzureSubscription}catch{Add-AzureAccount}
 
 foreach ($csub in $csubs)
 {
