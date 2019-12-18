@@ -1,0 +1,115 @@
+<#
+    Collect Azure VM details.
+    
+    .SYNOPSIS 
+        Searches every available subscription and collects Azure VM details, classic and ARM
+        Default outputs to grid-view. use outputtoExcel switch for a CSV
+#>
+param(
+[switch]$OutputToExcel  # ** use this switch if you want to output the results to a .CSV file.
+)
+
+#begin arm
+$subs = Get-AzSubscription -ErrorAction Stop
+$results = @()
+
+foreach ($sub in $subs)
+{
+    $vmsarm = $null
+    $vmsasm = $null
+
+    Write-Output "`nSubscription: $($sub.Name) - $($sub.Id)"
+    $subcontext = Select-AzSubscription -Subscription $($sub.Id)
+    
+    $disks = Get-AzDisk
+    
+    $vmsarm = Get-AzVM -ErrorAction Stop
+    foreach ($vm in $vmsarm)
+    {
+        $obj = New-Object -TypeName PSObject
+        Write-Output "Found VM: $($VM.Name)"
+        $obj | Add-Member -MemberType NoteProperty -Name SubscriptionName -Value $($sub.Name)
+        $obj | Add-Member -MemberType NoteProperty -Name SubscriptionID -Value $($sub.Id)
+        $obj | Add-Member -MemberType NoteProperty -Name RGroup/CService -Value $($vm.ResourceGroupName)
+        $obj | Add-Member -MemberType NoteProperty -Name VM_Name -Value $($vm.Name)
+        $obj | Add-Member -MemberType NoteProperty -Name Mgr -Value 'ARM'
+        $obj | Add-Member -MemberType NoteProperty -Name OS -Value $($vm.storageprofile.OsDisk.OsType)
+        $obj | Add-Member -MemberType NoteProperty -Name Location -Value $($vm.Location)
+        $obj | Add-Member -MemberType NoteProperty -Name VMSize -Value $($vm.HardwareProfile.VmSize)
+
+        $size = $Null
+        $size = Get-AzVMSize -Location $($vm.Location) |?{$_.Name -like $($Vm.HardwareProfile.VmSize)}
+        $obj | Add-Member -MemberType NoteProperty -Name NumberOfCores -Value $size.NumberOfCores
+        $obj | Add-Member -MemberType NoteProperty -Name MemoryInGB -Value ($size.MemoryInMB /1024)
+        $obj | Add-Member -MemberType NoteProperty -Name OSDiskName -Value $null
+        $obj | Add-Member -MemberType NoteProperty -Name OSDiskSizeGB -Value $null
+
+        foreach ($disk in $disks)
+        {
+            if ($disk.ManagedBy -like "*$($Vm.Name)")
+            {
+                $obj.OSDiskName = $($Disk.Name)
+                $obj.OSDiskSizeGB = $($Disk.DiskSizeGB)
+            }
+        }
+
+        $results += $obj
+    }
+} # end arm
+
+# start asm
+$csubs = Get-AzureSubscription
+
+foreach ($csub in $csubs)
+{
+    try{$csubcontext = Select-AzureSubscription -SubscriptionId $($csub.SubscriptionID)}catch{Add-AzureAccount}
+    
+    Write-Output "`nSubscription: $($csub.SubscriptionName) - $($csub.SubscriptionId)"
+    $vmsasm = Get-AzureVM -ErrorAction SilentlyContinue # errors if no access
+    
+        
+    foreach ($vmc in $vmsasm)
+    {
+        $cobj = New-Object -TypeName PSObject
+        Write-Output "Found VM: $($vmc.Name)"
+        $cobj | Add-Member -MemberType NoteProperty -Name SubscriptionName -Value $($csub.SubscriptionName)
+        $cobj | Add-Member -MemberType NoteProperty -Name SubscriptionID -Value $($csub.SubscriptionId)
+        $cobj | Add-Member -MemberType NoteProperty -Name RGroup/CService -Value $($vmc.ServiceName)
+        $cobj | Add-Member -MemberType NoteProperty -Name VM_Name -Value $($vmc.Name)
+        $cobj | Add-Member -MemberType NoteProperty -Name Mgr -Value 'ASM'
+        
+        $cobj | Add-Member -MemberType NoteProperty -Name VMSize -Value $($vmc.InstanceSize)
+
+        $size = $Null
+        $size = Get-AzVMSize -Location $($vm.Location) |?{$_.Name -like $($Vmc.InstanceSize)}
+        $cobj | Add-Member -MemberType NoteProperty -Name NumberOfCores -Value $size.NumberOfCores
+        $cobj | Add-Member -MemberType NoteProperty -Name MemoryInGB -Value ($size.MemoryInMB /1024)
+        $cobj | Add-Member -MemberType NoteProperty -Name OSDiskName -Value $($vmc.VM.OSVirtualHardDisk.DiskName)
+        
+        $cdisk = Get-AzureDisk |?{$_.MediaLink -eq $vmc.vm.OSVirtualHardDisk.MediaLink}
+
+        $cobj | Add-Member -MemberType NoteProperty -Name Location -Value $($cdisk.Location)
+        
+        $cobj | Add-Member -MemberType NoteProperty -Name OSDiskSizeGB -Value $($cdisk.DiskSizeInGB)
+                
+        $cobj | Add-Member -MemberType NoteProperty -Name OS -Value $($cdisk.OS)
+        
+        foreach ($cdisk in $osdisks)
+        {
+            if ($cdisk.ManagedBy -like "*$($Vmc.Name)")
+            {
+              
+            }
+        }
+        
+        $results += $cobj
+    }
+} # end asm
+ 
+
+ if ($outputtoExcel)
+ {
+    $results | Out-File -Append -Force -FilePath ".\VM-Audit.csv" -ea Stop
+ }
+ else{$results | Out-GridView}
+
