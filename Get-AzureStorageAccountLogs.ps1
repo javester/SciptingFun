@@ -37,6 +37,8 @@ param
 $LogContainer = "`$logs" # default dir for logs
 
 )
+ 
+if ((Get-AzContext) -eq $null){Add-AzAccount}
 
 Write-Output "Grabbing Storage Account Logs..."
 
@@ -174,9 +176,6 @@ if ((Get-AzContext) -eq $null)
     Add-AzAccount -ErrorAction Stop
 }
 
-Set-AzContext -Subscription $subscriptionId -ErrorAction Stop
-
-
 
 $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroup -Name $StorageAccountName -ErrorAction SilentlyContinue
 if($storageAccount -eq $null)
@@ -222,7 +221,8 @@ foreach($blob in $bloblist)
     Write-Output("Grabbing blob: $($blob.Name) - Size: $($blob.Length) - $i of $totalblobcount")
     $i++
     #$logfiletext = $blob.ICloudBlob.DownloadText()  # this doesn't work as it grabs the log file as one big string and then can't iterate through each record
-    $logfiletext = Get-AzStorageBlobContent -Blob $blob.Name -Container $LogContainer -Context $storageContext -Destination $file -Force -ErrorAction SilentlyContinue
+    $logfiletext = Get-AzStorageBlobContent -Blob $blob.Name -Container $LogContainer -Context $storageContext -Destination $file -Force -ErrorAction Continue
+    if ($logfiletext -eq $null){Write-Output "Unable to get Log file content!";exit}
     $logfiletext = Get-Content $file
     Remove-Item $file -Force
     if ($logfiletext -eq $null)
