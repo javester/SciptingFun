@@ -4,12 +4,12 @@
 
 #>
 param(
-[string][Parameter(Mandatory=$false)]$SubscriptionID,
-[string][Parameter(Mandatory=$false)]$ResourceGroup,
+[string][Parameter(Mandatory=$true)]$SubscriptionID,
+[string][Parameter(Mandatory=$true)]$ResourceGroup,
 [datetime]$StartDate, # in MM/DD/YYYY format
 [datetime]$EndDate,
-[string][Parameter(Mandatory=$false)]$StorageAccountName,
-[string][Parameter(Mandatory=$false)]$LogContainer,
+[string][Parameter(Mandatory=$true)]$StorageAccountName,
+[string][Parameter(Mandatory=$true)]$LogContainer,
 [string]$OutputFile="AppServiceLogs-$LogContainer.csv"
 )
 
