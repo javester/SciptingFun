@@ -9,7 +9,8 @@ param
     [String]$drive = "C:",
     [int]$Top = 10,
     [string]$Server = 'localhost'
-)  
+)
+Write-Output "`nAuditing $drive ... This may take a while..."
 $folders=""
 $rootdir=""
 $rootsize=$null
