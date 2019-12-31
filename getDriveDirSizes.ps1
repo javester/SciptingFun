@@ -45,4 +45,4 @@ $omsdata =  $outdata.GetEnumerator() | select Name,Value |ConvertTo-Json
      
 "`nTop $top directory sizes in GB on $drive on $server"
 $drivedirdata = $DRIVEDATA | Select-Object -First $top | Out-String 
-Return $drivedirdata  
+$drivedirdata
