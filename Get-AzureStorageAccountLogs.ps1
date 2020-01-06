@@ -37,7 +37,7 @@ param
 $LogContainer = "`$logs" # default dir for logs
 
 )
- 
+cd $HOME -ea STOP
 if ((Get-AzContext) -eq $null){Add-AzAccount}
 
 Write-Output "Grabbing Storage Account Logs..."
