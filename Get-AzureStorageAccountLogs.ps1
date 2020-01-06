@@ -196,7 +196,7 @@ if($Blobs -eq $Null)
 $bloblist=@()
 $i=1
 $ii=0
-$file = '.\0.log'
+$file = '0.log'
 foreach ($blob in $blobs)
 {
     $d = ($blob.name).Split('/')
