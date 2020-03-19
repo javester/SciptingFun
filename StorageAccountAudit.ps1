@@ -2,7 +2,7 @@
 
  Audit azure storage accounts for count of blobs, files, tables, queues
  currently supports ARM only accounts, not classic
- authored by jasims@microsoft.com
+ 
  v1.0 03/19/2020
 
  .PARAMETERS
