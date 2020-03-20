@@ -4,6 +4,10 @@
     .SYNOPSIS 
         Searches every available subscription and collects Azure VM details, classic and ARM
         Default outputs to grid-view. use outputtoExcel switch for a CSV
+        authored by jasims@microsoft.com
+        v1.0 12/17/2019
+        v1.1 03/20 2020 - added OS disk encryption property for ARM VMs
+
 #>
 param(
 [switch]$OutputToExcel  # ** use this switch if you want to output the results to a .CSV file.
@@ -43,6 +47,7 @@ foreach ($sub in $subs)
         $obj | Add-Member -MemberType NoteProperty -Name MemoryInGB -Value ($size.MemoryInMB /1024)
         $obj | Add-Member -MemberType NoteProperty -Name OSDiskName -Value $null
         $obj | Add-Member -MemberType NoteProperty -Name OSDiskSizeGB -Value $null
+        $obj | Add-Member -MemberType NoteProperty -Name OSDiskEncryption -Value $null
 
         foreach ($disk in $disks)
         {
@@ -50,10 +55,17 @@ foreach ($sub in $subs)
             {
                 $obj.OSDiskName = $($Disk.Name)
                 $obj.OSDiskSizeGB = $($Disk.DiskSizeGB)
+                $diskenc = Get-AzVMDiskEncryptionStatus -ResourceGroupName $($vm.ResourceGroupName) -VMName $($vm.Name) -ErrorAction Continue
+                $obj.OSDiskEncryption = $diskenc.OSVolumeEncrypted
+
+
+
             }
         }
 
         $results += $obj
+        $obj
+        ""
     }
 } # end arm
 
