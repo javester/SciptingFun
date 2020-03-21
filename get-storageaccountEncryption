@@ -1,3 +1,6 @@
+# audits azure storage account Encryption at Rest property
+
+
 $storageaccounts = Get-AzStorageAccount -ErrorAction Stop
 
 $results = @()
