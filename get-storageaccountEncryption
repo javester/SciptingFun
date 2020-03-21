@@ -1,0 +1,20 @@
+$storageaccounts = Get-AzStorageAccount -ErrorAction Stop
+
+$results = @()
+
+foreach ($account in $storageaccounts)
+{
+    $obj = New-Object -TypeName pscustomobject
+    $obj | Add-Member -MemberType NoteProperty -Name StorageAccountName -Value $account.storageaccountname
+    $obj | Add-Member -MemberType NoteProperty -Name EncryptionType -Value $null
+
+    $enc = $account.Encryption.KeySource
+    if ($enc -like "Microsoft.Keyvault"){$obj.EncryptionTYpe = "Customer Managed Key"}
+    elseif ($enc -like "Microsoft.Storage"){$obj.EncryptionTYpe = "Microsoft Managed Key"}
+    else{$obj.EncryptionTYpe = "Unknown"}
+    $results +=$obj
+}
+
+$results
+$results | Export-Csv -Path .\crap1.csv -NoTypeInformation -ErrorAction SilentlyContinue
+
