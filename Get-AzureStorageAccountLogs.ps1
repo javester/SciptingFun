@@ -34,7 +34,7 @@
 
 param
 (
-[datetime]$StartDate="04/23/2020", # in MM/DD/YYYY format
+[datetime]$StartDate, # example: "04/01/2019"
 [datetime]$EndDate,
 [Parameter(Mandatory=$true)]$ResourceGroup,
 [Parameter(Mandatory=$true)]$StorageAccountName,
