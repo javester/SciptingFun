@@ -7,8 +7,9 @@
 #
 # v1.0 Dec 2019
 
-  v1.1 Apr 2020 - add 'AllLogs' param which nulls start and end dates due to dd/mm/yyyy format bug outside of US
+  v1.1 Apr 2020 - work around error due to dd/mm/yyyy format bug outside of US, omit date range and it will successfully pull all logs
                  - now writes to the output CSV file after each log read instead of adding them to a single result object which was eating up huge system memory in cases where there are many logs.
+                 - log size now reports as MB instead of bytes
 #
 # TODO: FIX ASIA DATETIME FORMAT BUG - 04/25/2020. workaround is to use alllogs=true param and grab all logs which doesn't look at date range
 #
@@ -33,8 +34,7 @@
 
 param
 (
-[bool]$AllLogs = $false,
-[datetime]$StartDate, # in MM/DD/YYYY format
+[datetime]$StartDate="04/23/2020", # in MM/DD/YYYY format
 [datetime]$EndDate,
 [Parameter(Mandatory=$true)]$ResourceGroup,
 [Parameter(Mandatory=$true)]$StorageAccountName,
@@ -42,6 +42,8 @@ $LogContainer = "`$logs" # default dir for logs
 
 )
  
+[bool]$AllLogs = $false
+
 if ((Get-AzContext) -eq $null){Add-AzAccount -ErrorAction Stop}
  
 if ([string]::IsNullOrEmpty($StartDate) -and [string]::IsNullOrEmpty($EndDate))
@@ -55,13 +57,21 @@ if (!$AllLogs)
     {
         try{$datestart = (get-date -Format d $startdate -ErrorAction Stop)}catch{Write-Output "*** Please enter a valid Date in the format of MM/DD/YYYY.";exit}
         Write-Output "Start Date: $datestart"
-    } else {$datestart = get-date 1/1/1980}
+    } else
+    {
+        $datestart = get-date 1/1/1980
+        Write-Output "Start Date: (get-date 1/1/1980)"
+    }
 
     if ($EndDate -ne $null)
     {
         try{$dateend = (get-date -Format d $enddate -ErrorAction Stop)}catch{Write-Output "*** Please enter a valid Date in the format of MM/DD/YYYY.";exit}
         Write-Output "End Date: $dateend"
-    } else {$dateend = Get-Date -Format d}
+    } else 
+    {
+        $dateend = Get-Date -Format d
+        Write-Output "End Date: $(Get-Date -Format d)"
+    }
 
     if ($datestart -ne $null -and $dateend -ne $null -and $datestart -gt $dateend)
     {
@@ -234,7 +244,9 @@ foreach($blob in $bloblist)
     $d = ($blob.name).Split('/')
     [string]$d1 = $d[2] +"/"+ $d[3] + "/" + $d[1]
     
-    Write-Output("Grabbing blob: $($blob.Name) - Size: $($blob.Length) - $i of $totalblobcount")
+    $bsize=[math]::Round(($($blob.Length/1MB)),5)
+
+    Write-Output("Grabbing blob: $($blob.Name) - Size: $bsize MB - $i of $totalblobcount")
     $i++
     #$logfiletext = $blob.ICloudBlob.DownloadText()  # this doesn't work as it grabs the log file as one big string and then can't iterate through each record
     $logfiletext = Get-AzStorageBlobContent -Blob $blob.Name -Container $LogContainer -Context $storageContext -Destination $file -Force -ErrorAction Continue
