@@ -1,12 +1,16 @@
-# Get-StorageAccountLogs.ps1
+<# Get-StorageAccountLogs.ps1
 #
-# Grab all Storage Account Logs from $logs container and export to CSV for easy analysis in Excel
-# Why?  To simplify storage account log collection. Example: customer wants to know when ip address x.x.x.x accessed storage account in the past week. 
+# Grab all Storage Account Logs from $logs container and export to a single CSV for easy analysis in Excel.
+# Why?  To simplify storage account log collection/audit. Example: customer wants to know when ip address x.x.x.x accessed storage account in the past week. 
 # This script will avoid having to open the very many log files created for a busy storage account and instead put all records into a single Excel sheet for easy analysis.
 #
 #
 # v1.0 Dec 2019
+
+  v1.1 Apr 2020 - add 'AllLogs' param which nulls start and end dates due to dd/mm/yyyy format bug outside of US
+                 - now writes to the output CSV file after each log read instead of adding them to a single result object which was eating up huge system memory in cases where there are many logs.
 #
+# TODO: FIX ASIA DATETIME FORMAT BUG - 04/25/2020. workaround is to use alllogs=true param and grab all logs which doesn't look at date range
 #
 #
 # .PARAMETERS
@@ -24,12 +28,12 @@
 # Grab Logs from start to Dec 5th: .\Get-StorageAccountLogs.ps1 -ResourceGroup <resourcegroupname> -StorageAccountName <storageaccountname> -EndDate 12/05/2019
 # Grab Logs from Dec 2 to Dec 10: .\Get-StorageAccountLogs.ps1 -ResourceGroup <resourcegroupname> -StorageAccountName <storageaccountname> -StartDate 12/02/2019 -EndDate 12/10/2019
 #
-#
-#
-#
-#
+# 
+#>
+
 param
 (
+[bool]$AllLogs = $false,
 [datetime]$StartDate, # in MM/DD/YYYY format
 [datetime]$EndDate,
 [Parameter(Mandatory=$true)]$ResourceGroup,
@@ -37,34 +41,44 @@ param
 $LogContainer = "`$logs" # default dir for logs
 
 )
-cd $HOME -ea STOP
-if ((Get-AzContext) -eq $null){Add-AzAccount}
-
-Write-Output "Grabbing Storage Account Logs..."
-
-if ($StartDate -ne $null)
+ 
+if ((Get-AzContext) -eq $null){Add-AzAccount -ErrorAction Stop}
+ 
+if ([string]::IsNullOrEmpty($StartDate) -and [string]::IsNullOrEmpty($EndDate))
 {
-    try{$datestart = (get-date -Format d $startdate -ErrorAction Stop)}catch{Write-Output "*** Please enter a valid Date in the format of MM/DD/YYYY.";exit}
-    Write-Output "Start Date: $datestart"
-} else {$datestart = get-date 1/1/1980}
-
-if ($EndDate -ne $null)
-{
-    try{$dateend = (get-date -Format d $enddate -ErrorAction Stop)}catch{Write-Output "*** Please enter a valid Date in the format of MM/DD/YYYY.";exit}
-    Write-Output "End Date: $dateend"
-} else {$dateend = Get-Date -Format d}
-
-if ($datestart -ne $null -and $dateend -ne $null -and $datestart -gt $dateend)
-{
-    Write-Output "*** End date must be after Start date."
-    exit
+    $AllLogs=$true
 }
-[datetime]$dateend = $dateend
-[datetime]$datestart = $datestart
+
+if (!$AllLogs)
+{
+    if ([string]::IsNullOrEmpty($StartDate) -eq $false)
+    {
+        try{$datestart = (get-date -Format d $startdate -ErrorAction Stop)}catch{Write-Output "*** Please enter a valid Date in the format of MM/DD/YYYY.";exit}
+        Write-Output "Start Date: $datestart"
+    } else {$datestart = get-date 1/1/1980}
+
+    if ($EndDate -ne $null)
+    {
+        try{$dateend = (get-date -Format d $enddate -ErrorAction Stop)}catch{Write-Output "*** Please enter a valid Date in the format of MM/DD/YYYY.";exit}
+        Write-Output "End Date: $dateend"
+    } else {$dateend = Get-Date -Format d}
+
+    if ($datestart -ne $null -and $dateend -ne $null -and $datestart -gt $dateend)
+    {
+        Write-Output "*** End date must be after Start date."
+        exit
+    }
+    [datetime]$dateend = $dateend
+    [datetime]$datestart = $datestart
+}
+else
+    {
+        Write-Output "*** Targeting ALL LOGS ***"
+    }
 
 $results = @()
 
-# Convert ; to "%3B" between " in the csv line to prevent wrong values output after split with ;
+# Convert ; to "%3B" between " in the f line to prevent wrong values output after split with ;
 #
 Function ConvertSemicolonToURLEncoding([String] $InputText)
 {
@@ -170,13 +184,6 @@ Function ConvertLogLineToJson([String] $logLine)
     return $logJson
 }
 
-if ((Get-AzContext) -eq $null)
-{
-    Write-Output "Please log in to Azure first."
-    Add-AzAccount -ErrorAction Stop
-}
-
-
 $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroup -Name $StorageAccountName -ErrorAction SilentlyContinue
 if($storageAccount -eq $null)
 {
@@ -196,14 +203,24 @@ if($Blobs -eq $Null)
 $bloblist=@()
 $i=1
 $ii=0
-$file = '0.log'
+$file = '.\0.log'
 foreach ($blob in $blobs)
 {
     $d = ($blob.name).Split('/')
     [string]$d1 = $d[2] +"/"+ $d[3] + "/" + $d[1]
-    [datetime]$blobdate = (Get-Date -f d $d1)
+    
+    if (!$AllLogs)
+    {
+        [datetime]$blobdate = (Get-Date -f d $d1)
 
-    if (($Datestart -le $blobdate) -and ($dateEnd -ge $blobdate))
+        if (($Datestart -le $blobdate) -and ($dateEnd -ge $blobdate))
+        {
+            $ii++
+            $bloblist += $blob
+            $totalblobcount = $ii
+        }
+    }
+    else
     {
         $ii++
         $bloblist += $blob
@@ -216,15 +233,14 @@ foreach($blob in $bloblist)
 {
     $d = ($blob.name).Split('/')
     [string]$d1 = $d[2] +"/"+ $d[3] + "/" + $d[1]
-    [datetime]$blobdate = (Get-Date -f d $d1)
-
+    
     Write-Output("Grabbing blob: $($blob.Name) - Size: $($blob.Length) - $i of $totalblobcount")
     $i++
     #$logfiletext = $blob.ICloudBlob.DownloadText()  # this doesn't work as it grabs the log file as one big string and then can't iterate through each record
     $logfiletext = Get-AzStorageBlobContent -Blob $blob.Name -Container $LogContainer -Context $storageContext -Destination $file -Force -ErrorAction Continue
     if ($logfiletext -eq $null){Write-Output "Unable to get Log file content!";exit}
     $logfiletext = Get-Content $file
-    Remove-Item $file -Force
+    Remove-Item $file -Force -ErrorAction Stop
     if ($logfiletext -eq $null)
     {
         Write-Output "Unable to write the temp file to the current directory. Please change to a directory where you have write access and run again."
@@ -254,13 +270,14 @@ foreach($blob in $bloblist)
             Write-Output "Unable to convert log data for this record!"
             continue
         }
-      
-        $results += $output  
+        
+        $output | Export-Csv -Append -NoTypeInformation -Path .\StorageAccountLogs-$StorageAccountName.csv -Force -ErrorAction Continue
+
+        #$results += $output  
     }
 }
-
-$results | Export-Csv -NoTypeInformation -Path ".\StorageAccountLogs-$StorageAccountName.csv" -Force -Append -ErrorAction Stop
-Write-Output "File output to .\StorageAccountLogs-$StorageAccountName.csv"
+ 
+Write-Output "Results output to .\StorageAccountLogs-$StorageAccountName.csv"
 
 
 
