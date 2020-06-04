@@ -49,7 +49,7 @@ if ($sanotfound -ne $true)
 else
 {
     #CLASSIC 
-    $stc = (Get-AzureStorageAccount -StorageAccountName $storageaccountname).Context
+    $stc = (Get-AzureStorageAccount -StorageAccountName $storageaccountname -ErrorAction Stop).Context
     $containers = Get-AzureStorageContainer -Context $stc -ErrorAction Stop
     foreach ($container in $containers)
     {
