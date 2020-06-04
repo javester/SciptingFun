@@ -1,52 +1,84 @@
+<#
+# get total size of VHD files (or whatever file filter you want)  found in storage account
+  might also count up snapshots sizes? let me know
 
- <#
-    .SYNOPSIS
-        Search a drive for the top largest directory sizes!  Handy to figure out why your drive is full!
- #>
-  
-param 
-( 
-[String]$drive = "C:",
-[int]$Top = 10,
-[string]$Server = 'localhost'
-)  
-$folders=""
-$rootdir=""
-$rootsize=$null
-    
-if (!(test-path $drive)){"Drive $drive Doesn't Exist!";return}
+  ARM vs CLASSIC:
+  ARM accounts require the resource group param
 
-$sharePath = $drive.Replace(":","$")
-$FileSystemObject = New-Object -com  Scripting.FileSystemObject 
-     
-$folders = (gci "\\$server\$sharePath\" -recurse -Directory -Force -ErrorAction Silentlycontinue | ? {$_.PSIsContainer}) #? {$_.Attributes -eq "Directory"}) }
-$rootdir = (gci "\\$server\$sharePath\" -Force -ErrorAction Silentlycontinue)
-       
-$rootsize = [math]::Round(($rootdir | Measure-Object -Sum Length).Sum / 1gb,2)
-$rootdir | Add-Member -MemberType NoteProperty -Name "SizeGB" –Value($rootsize / 1GB) 
-  
-foreach ($folder in $folders) 
-{  
-    $folder | Add-Member -MemberType NoteProperty -Name "SizeGB" –Value(($FileSystemObject.GetFolder($folder.FullName).Size) / 1GB) 
-} 
-  
-$output = $folders | select * | Where-Object SizeGB -gt 0.01 | Sort-Object SizeGB -Descending
-    
-$outdata=@{};
-foreach ($e in $output)
+#>
+
+param(
+$resourcegroupname = 'rg1',            # PROVIDE RESOURCE GROUP OF STORAGE ACCOUNT if ARM
+$storageaccountname = 'rg18579',  # PROVIDE STORAGE ACCOUNT NAME rg18579
+$storageaccountkey = 'OcD4giRfDwDHQ1uUsM8b5JytnRFtu4zRbtXAjFJaEDjkrR7qzhk4fnMSFB92+DoGnnXHvozbV+Ptk6sLHy93vA==', # NEEDED IF CLASSIC
+[switch]$nototal = $true
+)
+
+$output = @()
+$totalsizeofVHDs = 0
+
+#ARM
+try{$stc = Get-AzStorageAccount -ResourceGroupName $resourceGroupName -Name $storageAccountName -ErrorAction Stop}
+catch{$sanotfound=$true}
+
+if ($sanotfound -ne $true)
 {
-    $OutData.Add($e.FullName,[string]$e.SizeGB)
+    $containers = Get-AzStorageContainer -Context $stc.Context -ErrorAction Stop
+
+    foreach ($container in $containers)
+    {
+        $blobs = Get-AzStorageBlob -Name $container.name -Context $stc.Context -ErrorAction Stop
+
+        foreach ($blob in $blobs)
+        {
+            if ($blob.Name -like '*.vhd' -and $blob.IsDeleted -eq $false) # FILTER TO WHATEVER YOU WANT
+            {   $o = New-Object -TypeName psobject
+                $o | Add-Member -MemberType NoteProperty -Name Name -Value $blob.Name
+                $o | Add-Member -MemberType NoteProperty -Name StorageAccount -Value $storageAccountName
+                $o | Add-Member -MemberType NoteProperty -Name Container -Value $container.Name
+                $o | Add-Member -MemberType NoteProperty -Name SizeGB -Value $null
+                $size = ([Math]::Round($($blob.Length)/1gb,3))
+                $o.SizeGB = $size
+                $totalsizeofVHDs += $size
+                $output += $o
+            }
+        }
+    }
 }
-$outdata.Add("\\$server\$sharePath",[string]$rootsize)
+
+else
+{
+    #CLASSIC
   
-$DRIVEDATA = $outdata.GetEnumerator() | select Name,Value| sort-object Value -Descending | ConvertTo-Json | ConvertFrom-Json
- 
-#format for OMS
-$omsdata =  $outdata.GetEnumerator() | select Name,Value |ConvertTo-Json 
-#$omsdata
+    $stc = (Get-AzureStorageAccount -StorageAccountName $storageaccountname).Context
+    $containers = Get-AzureStorageContainer -Context $stc -ErrorAction Stop
+    foreach ($container in $containers)
+    {
+        $blobs = Get-AzureStorageBlob -Name $container.name -Context $stc.Context -ErrorAction Stop
 
-#$obj= New-Object psobject
+        foreach ($blob in $blobs)
+        {
+            if ($blob.Name -like '*.vhd' -and $blob.IsDeleted -eq $false) # FILTER TO WHATEVER YOU WANT
+            {   $o = New-Object -TypeName psobject
+                $o | Add-Member -MemberType NoteProperty -Name Name -Value $blob.Name
+                $o | Add-Member -MemberType NoteProperty -Name StorageAccount -Value $storageAccountName
+                $o | Add-Member -MemberType NoteProperty -Name Container -Value $container.Name
+                $o | Add-Member -MemberType NoteProperty -Name SizeGB -Value $null
+                $size = ([Math]::Round($($blob.Length)/1gb,3))
+                $o.SizeGB = $size
+                $totalsizeofVHDs += $size
+                $output += $o
+            }
+        }
+    }
 
-"`nTop $top directory sizes in GB on $drive on $server"
-$drivedirdata = $DRIVEDATA | Select-Object -First $top | Out-String 
-Return $drivedirdata 
+}
+
+
+$output
+
+if ($nototal)
+{
+    Write-Output "`nTotal blob size in storage account '$storageaccountName': $totalsizeofVHDs GB"
+}
+
