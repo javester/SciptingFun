@@ -1,20 +1,48 @@
 <#
-    Collect Azure VM details.
+
+DISCLAIMER - By downloading / using these scripts you are agreeing that they are "Use at your own risk" and I will not be held responsible for any impact. Please make sure they will work for your need!
+
+<# These sample scripts are not supported under any Microsoft standard support program or service. The sample scripts
+
+are provided AS IS without warranty of any kind. Microsoft further disclaims all implied warranties including, without
+
+limitation, any implied warranties of merchantability or of fitness for a particular purpose. The entire risk arising
+
+out of the use or performance of the sample scripts and documentation remains with you. In no event shall Microsoft,
+
+its authors, or anyone else involved in the creation, production, or delivery of the scripts be liable for any damages
+
+whatsoever (including, without limitation, damages for loss of business profits, business interruption, loss of business
+
+information, or other pecuniary loss) arising out of the use of or inability to use the sample scripts or documentation,
+
+even if Microsoft has been advised of the possibility of such damages.
+
+
+    Collect Azure VM details. Targets ASM and ARM.
     
     .SYNOPSIS 
         Searches every available subscription and collects Azure VM details, classic and ARM
         Default outputs to grid-view. use outputtoExcel switch for a CSV
-        authored by jasims@microsoft.com
+        authored by <REMOVED>@microsoft.com
         v1.0 12/17/2019
-        v1.1 03/20 2020 - added OS disk encryption property for ARM VMs
+        v1.1 03/20/2020 - added OS disk encryption property for ARM VMs
+        v1.2 08/20/2020 - added primary nic IP addresses
+                          added Powerstate property
+                          added param for single subscriptionid
 
 #>
 param(
+$subscriptionid = "6abccfbc-2d9a-4721-925d-3d231fe91340", # if you want to grab VM details from just one subscription, specify the subid
 [switch]$OutputToExcel  # ** use this switch if you want to output the results to a .CSV file.
+
 )
 
 #begin arm
-$subs = Get-AzSubscription -ErrorAction Stop
+if (!$subscriptionid)
+{$subs = Get-AzSubscription -ErrorAction Stop}
+else {$subs = Get-AzSubscription -SubscriptionId $subscriptionid -ErrorAction Stop}
+
 $results = @()
 
 foreach ($sub in $subs)
@@ -27,11 +55,11 @@ foreach ($sub in $subs)
     
     $disks = Get-AzDisk
     
-    $vmsarm = Get-AzVM -ErrorAction Stop
+    $vmsarm = Get-AzVM -Status -ErrorAction Stop
     foreach ($vm in $vmsarm)
     {
+        
         $obj = New-Object -TypeName PSObject
-        Write-Output "Found VM: $($VM.Name)"
         $obj | Add-Member -MemberType NoteProperty -Name SubscriptionName -Value $($sub.Name)
         $obj | Add-Member -MemberType NoteProperty -Name SubscriptionID -Value $($sub.Id)
         $obj | Add-Member -MemberType NoteProperty -Name RGroup/CService -Value $($vm.ResourceGroupName)
@@ -40,6 +68,7 @@ foreach ($sub in $subs)
         $obj | Add-Member -MemberType NoteProperty -Name OS -Value $($vm.storageprofile.OsDisk.OsType)
         $obj | Add-Member -MemberType NoteProperty -Name Location -Value $($vm.Location)
         $obj | Add-Member -MemberType NoteProperty -Name VMSize -Value $($vm.HardwareProfile.VmSize)
+        $obj | Add-Member -MemberType NoteProperty -Name PowerState -Value $($vm.PowerState)
 
         $size = $Null
         $size = Get-AzVMSize -Location $($vm.Location) |?{$_.Name -like $($Vm.HardwareProfile.VmSize)}
@@ -48,6 +77,26 @@ foreach ($sub in $subs)
         $obj | Add-Member -MemberType NoteProperty -Name OSDiskName -Value $null
         $obj | Add-Member -MemberType NoteProperty -Name OSDiskSizeGB -Value $null
         $obj | Add-Member -MemberType NoteProperty -Name OSDiskEncryption -Value $null
+        $obj | Add-Member -MemberType NoteProperty -Name PrivateIPAddress -Value $null
+        $obj | Add-Member -MemberType NoteProperty -Name PublicIPAddress -Value $null
+
+
+
+        $nic = ($vm.NetworkProfile.Networkinterfaces.id).Split('/')[-1]
+        $nicdetails = Get-AzNetworkInterface -Name $nic
+        $privateip = $($nicdetails.IpConfigurations.PrivateIpAddress)
+        $publicipc = $($nicdetails.IpConfigurations.PublicIPAddress)[0]
+        if (!$publicipc.IpAddress)
+        {
+            $publicip = (Get-AzPublicIpAddress -Name $($publicipc.Id.Split('/')[-1])).IpAddress
+        }
+        else 
+        {
+            $publicip = "Not Assigned"
+        }
+        
+        $obj.PrivateIPAddress = $privateip
+        $obj.PublicIpAddress = $publicip
 
         foreach ($disk in $disks)
         {
@@ -70,7 +119,19 @@ foreach ($sub in $subs)
 } # end arm
 
 # start asm
-try{$csubs = Get-AzureSubscription}catch{Add-AzureAccount}
+if (!$subscriptionid)
+    {
+     try
+        {
+            $csubs = Get-AzureSubscription
+        }
+        catch
+        {
+            Add-AzureAccount
+        }
+    }
+
+else{$csubs = Get-AzureSubscription $subscriptionid}
 
 foreach ($csub in $csubs)
 {
@@ -88,8 +149,8 @@ foreach ($csub in $csubs)
         $cobj | Add-Member -MemberType NoteProperty -Name SubscriptionID -Value $($csub.SubscriptionId)
         $cobj | Add-Member -MemberType NoteProperty -Name RGroup/CService -Value $($vmc.ServiceName)
         $cobj | Add-Member -MemberType NoteProperty -Name VM_Name -Value $($vmc.Name)
+        $cobj | Add-Member -MemberType NoteProperty -Name PowerState -Value $($vmc.PowerState)
         $cobj | Add-Member -MemberType NoteProperty -Name Mgr -Value 'ASM'
-        
         $cobj | Add-Member -MemberType NoteProperty -Name VMSize -Value $($vmc.InstanceSize)
 
         $size = $Null
@@ -97,7 +158,9 @@ foreach ($csub in $csubs)
         $cobj | Add-Member -MemberType NoteProperty -Name NumberOfCores -Value $size.NumberOfCores
         $cobj | Add-Member -MemberType NoteProperty -Name MemoryInGB -Value ($size.MemoryInMB /1024)
         $cobj | Add-Member -MemberType NoteProperty -Name OSDiskName -Value $($vmc.VM.OSVirtualHardDisk.DiskName)
-        
+        $cobj | Add-Member -MemberType NoteProperty -Name PrivateIPAddress -Value $($vmc.IpAddress)
+        $cobj | Add-Member -MemberType NoteProperty -Name PublicIPAddress -Value $null
+
         $cdisk = Get-AzureDisk |?{$_.MediaLink -eq $vmc.vm.OSVirtualHardDisk.MediaLink}
 
         $cobj | Add-Member -MemberType NoteProperty -Name Location -Value $($cdisk.Location)
