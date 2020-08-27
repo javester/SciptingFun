@@ -19,22 +19,25 @@ information, or other pecuniary loss) arising out of the use of or inability to 
 even if Microsoft has been advised of the possibility of such damages.
 
 
-    Collect Azure VM details. Targets ASM and ARM.
+    Collect Azure VM details.
     
     .SYNOPSIS 
         Searches every available subscription and collects Azure VM details, classic and ARM
-        Default outputs to grid-view. use outputtoExcel switch for a CSV
+        Use swtich -OutputtoCSV switch for a CSV
         authored by <REMOVED>@microsoft.com
         v1.0 12/17/2019
         v1.1 03/20/2020 - added OS disk encryption property for ARM VMs
         v1.2 08/20/2020 - added primary nic IP addresses
                           added Powerstate property
                           added param for single subscriptionid
+        08/27/2020 -      fixed bug - thew error if vm has no public ip
+                          default output to CSV on
+
 
 #>
 param(
 $subscriptionid = "6abccfbc-2d9a-4721-925d-3d231fe91340", # if you want to grab VM details from just one subscription, specify the subid
-[switch]$OutputToExcel  # ** use this switch if you want to output the results to a .CSV file.
+[switch]$OutputToCSV = $true  # ** use this switch if you want to output the results to a .CSV file. Defaults to TRUE
 
 )
 
@@ -85,14 +88,17 @@ foreach ($sub in $subs)
         $nic = ($vm.NetworkProfile.Networkinterfaces.id).Split('/')[-1]
         $nicdetails = Get-AzNetworkInterface -Name $nic
         $privateip = $($nicdetails.IpConfigurations.PrivateIpAddress)
-        $publicipc = $($nicdetails.IpConfigurations.PublicIPAddress)[0]
-        if (!$publicipc.IpAddress)
+
+        if ($($nicdetails.IpConfigurations.PublicIPAddress).count -gt 1)
         {
+            $publicipc = $($nicdetails.IpConfigurations.PublicIPAddress)[0]
             $publicip = (Get-AzPublicIpAddress -Name $($publicipc.Id.Split('/')[-1])).IpAddress
         }
-        else 
+        elseif ($($nicdetails.IpConfigurations.PublicIPAddress))
         {
-            $publicip = "Not Assigned"
+            $publicipc = $($nicdetails.IpConfigurations.PublicIPAddress)
+            $publicip = (Get-AzPublicIpAddress -Name $($publicipc.Id.Split('/')[-1])).IpAddress
+            #$publicip = "Not Assigned"
         }
         
         $obj.PrivateIPAddress = $privateip
@@ -182,9 +188,15 @@ foreach ($csub in $csubs)
 } # end asm
  
 
- if ($outputtoExcel)
+ if ($outputtoCSV)
  {
-    $results | Out-File -Append -Force -FilePath ".\VM-Audit.csv" -ea Stop
+    $d = (Get-Date -Format u).Replace(' ','T').Replace(':','.')
+    $outname = "VM-Audit-$d.csv"
+    $results | Export-Csv -NoTypeInformation -Path ".\$outname" -EA Stop
+    if (Test-Path -Path .\$outname)
+    {
+        Write-Output "Results output to .\$outname"
+    }
  }
- else{$results | Out-GridView}
+ 
 
