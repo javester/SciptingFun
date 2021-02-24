@@ -8,11 +8,19 @@
 # Use at your own risk!!! This is likely not the best way to do this but it works if you don't have a lot of blobs!
 
 
+ 
+
+# search blobs in storage account and change any found in 'archive' tier to 'cool' tier.
+# useful if needing to azcopy the data to another storage account as operations can't be done against archived blobs
+
+# down and dirty script - no error checking or catching.  Assumes all required permissions exist etc
+
 
 # User variables - modify as required
-$StorageAccount = '<storage account name>'
-$ResourceGroup = '<resource group name>'
-$newTier = "Cool"
+$StorageAccount = '<storageaccount>'
+$ResourceGroup = '<resourcegroup>'
+$newTier = "<tier>" # Hot,Cool,Archive
+$maxblobs = 10000 # maximum number of blobs to return at once - this effects the local machine's resources greatly. Recommend 10k maximum and this might still use a lot of RAM.
 
 $starttime = Get-Date
 
@@ -24,32 +32,34 @@ $ctx = (get-AzStorageaccount –StorageAccountName $storageAccount -resourcegrou
 #grab existing containers
 $containers = Get-AzStorageContainer -Context $ctx
 
+
 #loop through each container
 foreach ($c in $containers)
-{ 
-    $i = 0
-    $bc = 0
-    #grab a list of blobs in container
-    Write-Output "`nGather Blob info in Container '$($c.Name)' ..."
-    $blobs = Get-AzStorageBlob -Context $ctx -Container $c.Name | ?{$_.ICloudBlob.IsSnapshot -eq $false -and $_.AccessTier -like "Archive"}   
-    
-
-    # This may be the fastest way to do this but there will be zero progress indication.
-    # $blobs.icloudblob.setstandardblobtier($newTier)
-
-
-
-    Write-Output "`nFound $($blobs.count) Archived Blobs in Container '$($c.Name)'."
-    
-    $bc = $blobs.count
-
-    foreach ($b in $blobs)
-    {
-        $i++
-        Write-Output "`nOperation $i of $bc ..."
-        Write-Output "Changing tier for archived blob $($b.ICloudBlob.Uri)"
-        $b.ICloudBlob.SetStandardBlobTier($newTier)
-    }     
+{
+    $contoken = $null
+    $total = 0
+    do 
+    {        
+        $i = 0
+        $bc = 0
+        #grab a list of blobs in container
+        Write-Output "`nGathering Blob info in Container '$($c.Name)'..."
+        
+        $allblobs = Get-AzStorageBlob -Context $ctx -Container $($c.Name) -MaxCount $maxblobs -ContinuationToken $contoken 
+        $blobs = $allblobs | ?{$_.ICloudBlob.IsSnapshot -eq $false -and $_.AccessTier -like "Archive"}   
+        
+        #Write-Output "`nFound $($blobs.count) Archived Blobs in Container '$($c.Name)'."
+        
+        $Total += $allblobs.Count
+        foreach ($b in $blobs)
+        {
+            Write-Output "Changing tier for archived blob $($b.ICloudBlob.Uri)"
+            $b.ICloudBlob.SetStandardBlobTier($newTier)
+        }
+        if($allblobs.Length -le 0) {break}
+        $contoken = $allblobs[$allblobs.Count -1].ContinuationToken; 
+    } while ($contoken -ne $Null)
+    Write-Output "Total blobs in container '$($c.Name)': $Total" 
 }
 
 
@@ -60,22 +70,3 @@ $endtime = Get-Date
 $etime = (($endtime) - ($starttime))
 
 Write-Output "Completed in $($etime.Hours) Hours, $($etime.Minutes) Minutes, $($etime.Seconds) Seconds."
-
-
-
-## AZ mess around
-<#
-
-$connectionString = "<ConnectionString>"
-$containerName = "<ContainerName>"
-
-$hotAccessTierFiles = az storage blob list --connection-string $connectionString --container-name $containerName --query "[?properties.blobTier=='Archive'].name" --num-results *
-
-Add-Type -AssemblyName System.Web.Extensions
-$JS = New-Object System.Web.Script.Serialization.JavaScriptSerializer
-
-$hotAccessTierFilesObject = $JS.DeserializeObject($hotAccessTierFiles)
-
-$hotAccessTierFilesObject | % { az storage blob set-tier --connection-string $connectionString --container-name $containerName --name $_ --tier "Hot" }
-
-#>
