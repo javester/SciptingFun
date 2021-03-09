@@ -26,7 +26,7 @@ $starttime = Get-Date
 
 
 #set storage account context
-$ctx = (get-AzStorageaccount –StorageAccountName $storageAccount -resourcegroup $resourceGroup).context
+$ctx = (get-AzStorageaccount -ErrorAction Stop –StorageAccountName $storageAccount -resourcegroup $resourceGroup).context
 
 
 #grab existing containers
