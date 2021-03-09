@@ -17,23 +17,11 @@ information, or other pecuniary loss) arising out of the use of or inability to 
 even if Microsoft has been advised of the possibility of such damages. #>
 
 
+# RehydrateArchiveBlobs.ps1 
 
-# RehydrateArchiveBlobs.ps1
-# Search blobs in storage account and change any found in 'archive' tier to 'cool' tier.
-# useful if needing to azcopy the data to another storage account as operations can't be done against archived blobs
-
-# down and dirty script - no error checking or catching.  Assumes all required permissions exist etc
-# tested on a storage account with 20k blobs in container and it used approx 16gb of ram on a VM!!!
-# Use at your own risk!!! This is likely not the best way to do this but it works if you don't have a lot of blobs!
-
-
- 
-
-# search blobs in storage account and change any found in 'archive' tier to 'cool' tier.
-# useful if needing to azcopy the data to another storage account as operations can't be done against archived blobs
-
-# down and dirty script - no error checking or catching.  Assumes all required permissions exist etc
-
+# down and dirty script - no error checking or catching.  Assumes all required permissions exist etc 
+  
+# search blobs in storage account and change access tier from A to B.
 
 # User variables - modify as required
 
