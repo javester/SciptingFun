@@ -56,9 +56,6 @@ $dest = Get-AzStorageShare -Name $destinationShareName -Context $ctx -ErrorActio
 Write-Host "Creating SAS Token..."
 $sastoken = (New-AzStorageAccountSASToken -Service File -Permission rwlad -ResourceType "Service,Container,Object" -ExpiryTime (Get-Date).AddHours(1) -Context $ctx).ToString()
 
-# remove escaped colon chars
-#$sastoken = $sastoken.Replace('%3A',':')
-
 # verify that AzCopy is available in path:
 Write-Host "Verifying AzCopy is in path..."
 $azcopyexists = .\azcopy.exe --version
