@@ -1,0 +1,91 @@
+<# 
+
+DISCLAIMER - By downloading / using these scripts you are agreeing that they are "Use at your own risk" and I will not be held responsible for any impact. Please make sure they will work for your need!
+
+<# These sample scripts are not supported under any Microsoft standard support program or service. The sample scripts
+
+are provided AS IS without warranty of any kind. Microsoft further disclaims all implied warranties including, without
+
+limitation, any implied warranties of merchantability or of fitness for a particular purpose. The entire risk arising
+
+out of the use or performance of the sample scripts and documentation remains with you. In no event shall Microsoft,
+
+its authors, or anyone else involved in the creation, production, or delivery of the scripts be liable for any damages
+
+whatsoever (including, without limitation, damages for loss of business profits, business interruption, loss of business
+
+information, or other pecuniary loss) arising out of the use of or inability to use the sample scripts or documentation,
+
+even if Microsoft has been advised of the possibility of such damages.
+    
+    
+    .DESCRIPTION
+    
+    This script will copy all existing snapshots from a specified share into a specified share in the same storage account.
+
+    This script is handy if you have reached the maximum number of file share snapshots (200) and want to retain them and make more.
+    It will copy the file contents from the snapshots to a specified alternate backup share/folder. 
+    Since the snapshot will be deleted, restoring the files requires a manual copy operation from the new backup location back to the original file share path.
+    
+    This script uses AzCopy - please make sure AzCopy is available in the current Powershell instance scope. https://aka.ms/downloadazcopy-v10-windows
+
+    To avoid destructive operations and potential data loss, This script will not delete the existing snapshot.  It is up to the user executing this to validate that the snapshot data is copied before making the decision to delete the snapshots.
+
+
+#>
+
+param(
+[Parameter(Mandatory=$true)]$StorageAccount="",
+[Parameter(Mandatory=$true)]$resourceGroup="",
+[Parameter(Mandatory=$true)]$ShareName="",
+[Parameter(Mandatory=$true)]$destinationShareName=""
+)
+
+# Check that you are logged into Azure
+Get-AzContext -ErrorAction Stop
+
+#get storage account context
+Write-Host "Setting Storage Account Context.  This will fail if the right subscription isn't selected with 'Select-AzSubscription.'"
+$ctx = (Get-AzStorageAccount -ResourceGroupName $resourceGroup -Name $StorageAccount -ErrorAction Stop).Context
+
+# check that destination share exists
+Write-Host "Checking that the share '$destinationShareName' exists..."
+$dest = Get-AzStorageShare -Name $destinationShareName -Context $ctx -ErrorAction Stop
+
+#Create SAS token 
+Write-Host "Creating SAS Token..."
+$sastoken = (New-AzStorageAccountSASToken -Service File -Permission rwlad -ResourceType "Service,Container,Object" -ExpiryTime (Get-Date).AddHours(1) -Context $ctx).ToString()
+
+# remove escaped colon chars
+#$sastoken = $sastoken.Replace('%3A',':')
+
+# verify that AzCopy is available in path:
+Write-Host "Verifying AzCopy is in path..."
+$azcopyexists = .\azcopy.exe --version
+$azcopyexists
+if ($azcopyexists -eq $null)
+{
+    Write-Host "Please install AzCopy and place it in the path: https://aka.ms/downloadazcopy-v10-windows"
+    exit
+}
+
+# get list of existing snapshots on the share:
+$snapshots = Get-AzStorageShare -Context $ctx | ?{$_.IsSnapshot -eq $true -and $_.Name -like $ShareName} -ErrorAction Stop
+
+# loop through each snapshot found
+foreach ($s in $snapshots)
+{
+    # grab snapshot path and id
+    $snapuri = $s.CloudFileShare.SnapshotQualifiedStorageUri.PrimaryUri.ToString()
+    $snappath = $snapuri.Split(1,'?')[0] # split uri to grab path and id separately
+    $snapid = $snapuri.Split(1,'?')[1]
+    
+    
+    # build azcopy command
+    $azcopysource = ("https://$StorageAccount.file.core.windows.net/$ShareName" + $sastoken + "&" + $snapid).ToString()
+    $azcopydest = ("https://$StorageAccount.file.core.windows.net/$destinationShareName/$ShareName-" +($snapid.Replace(':','-')) +"$sastoken").ToString() # Note: dest folder can't contain : char, so replacin with -
+    # execute az copy
+    & .\azcopy.exe copy `"$azcopysource`" `"$azcopydest`" --recursive --log-level=error 
+}
+
+Write-Host "`n`nCopy complete.  Please verify that the data is in StorageAccount: $StorageAccount, Share Name: $destinationShareName."
