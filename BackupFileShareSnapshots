@@ -85,7 +85,7 @@ foreach ($s in $snapshots)
     $azcopysource = ("https://$StorageAccount.file.core.windows.net/$ShareName" + $sastoken + "&" + $snapid).ToString()
     $azcopydest = ("https://$StorageAccount.file.core.windows.net/$destinationShareName/$ShareName-" +($snapid.Replace(':','-')) +"$sastoken").ToString() # Note: dest folder can't contain : char, so replacin with -
     # execute az copy
-    & .\azcopy.exe copy `"$azcopysource`" `"$azcopydest`" --recursive --log-level=error 
+    & .\azcopy.exe copy `"$azcopysource`" `"$azcopydest`" --recursive --overwrite=false --log-level=error 
 }
 
 Write-Host "`n`nCopy complete.  Please verify that the data is in StorageAccount: $StorageAccount, Share Name: $destinationShareName."
